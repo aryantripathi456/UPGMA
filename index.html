@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>UPGMA, Step by Step</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7fb;--card:#fff;--tx:#1d2330;--mut:#667085;--bd:#e3e6ee;--ac:#4f46e5;--hl:#fff3c4;--hlb:#f5b700;--code:#f1f3f9;--ok:#0f9d6b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10131a;--card:#181c26;--tx:#e8ebf3;--mut:#9aa3b5;--bd:#2a3040;--ac:#8b85ff;--hl:#4a3f10;--hlb:#f5b700;--code:#12151d;--ok:#3ddc97}}
+:root[data-theme="dark"]{--bg:#10131a;--card:#181c26;--tx:#e8ebf3;--mut:#9aa3b5;--bd:#2a3040;--ac:#8b85ff;--hl:#4a3f10;--hlb:#f5b700;--code:#12151d;--ok:#3ddc97}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:28px 20px 8px;max-width:1200px;margin:auto}
+h1{margin:0 0 4px;font-size:1.7rem}
+header p{margin:0;color:var(--mut)}
+main{max-width:1200px;margin:auto;padding:16px 20px 40px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:860px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;min-width:0}
+.card h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
+.code{background:var(--code);border-radius:10px;padding:8px 0;overflow-x:auto;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace}
+.ln{display:flex;white-space:pre;padding:0 10px;border-left:3px solid transparent;min-height:1.6em}
+.ln b{color:var(--mut);font-weight:400;width:2.4em;flex:none;user-select:none}
+.ln.on{background:var(--hl);border-left-color:var(--hlb)}
+.nav{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
+button.g{background:transparent;color:var(--tx);border:1px solid var(--bd)}
+button:disabled{opacity:.4;cursor:default}
+.dots{display:flex;gap:5px;flex:1;min-width:120px}
+.dots i{height:6px;flex:1;border-radius:3px;background:var(--bd);cursor:pointer}
+.dots i.on{background:var(--ac)}
+.step h3{margin:0 0 6px;font-size:1.15rem}
+.step p{margin:6px 0}
+code{background:var(--code);padding:1px 5px;border-radius:5px;font:.88em ui-monospace,Menlo,monospace}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--bd);border-radius:10px;padding:6px 10px;font-size:.85rem;background:var(--code)}
+.chip.new{border-color:var(--ok);box-shadow:0 0 0 2px color-mix(in srgb,var(--ok) 25%,transparent)}
+.chip.pick{border-color:var(--hlb);background:var(--hl)}
+.chip small{color:var(--mut);display:block}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+td,th{border-bottom:1px solid var(--bd);padding:5px 8px;text-align:left}
+tr.pick td{background:var(--hl)}
+tr.new td{color:var(--ok);font-weight:600}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.row2{grid-template-columns:1fr}}
+svg{width:100%;height:auto;max-height:260px;display:block}
+svg text{fill:var(--tx);font:12px system-ui}
+svg .l{stroke:var(--ac);stroke-width:2.5;fill:none}
+.out{font:13px ui-monospace,Menlo,monospace;background:var(--code);padding:8px 10px;border-radius:8px;word-break:break-all;margin-top:8px}
+.right{display:flex;flex-direction:column;gap:16px}
+</style></head><body>
+<header><h1>UPGMA, line by line</h1>
+<p>Build a phylogenetic tree from a distance matrix. Click through the steps and watch the code, data and tree change together.</p></header>
+<main>
+<section class="card"><h2>Python code</h2><div class="code" id="code"></div></section>
+<div class="right">
+<section class="card">
+<div class="nav"><button class="g" id="prev">&larr; Back</button><button id="next">Next &rarr;</button><div class="dots" id="dots"></div></div>
+<div class="step" id="step"></div></section>
+<section class="card"><h2>Live state</h2>
+<div class="chips" id="act"></div>
+<div class="row2" style="margin-top:12px"><div><table id="dist"></table></div><div><svg id="tree" viewBox="0 0 280 230"></svg></div></div>
+<div class="out" id="out"></div></section>
+</div></main>
+<script>
+const CODE=`import numpy as np
+
+def upgma(matrix: list[list], labels: list[str]):
+
+    active_clusters = {
+        i: [labels[i],1,0.0] for i in range(len(labels))
+    }
+
+    distances = {
+        (i,j): matrix[i][j] for i in range(len(labels)) for j in range(len(labels)) if i!=j
+    }
+
+    while len(active_clusters) > 1:
+
+        u, v = min(((i,j) for i in active_clusters for j in active_clusters if i<j),key=lambda x: distances[x])
+
+        height = distances[u,v] / 2.0
+
+        branch_u, branch_v = height - active_clusters[u][2] , height - active_clusters[v][2]
+        count_u, count_v = active_clusters[u][1], active_clusters[v][1]
+
+        new_id = max(active_clusters)+1
+        active_clusters[new_id] = [f"({active_clusters[u][0]}:{branch_u:.2f},{active_clusters[v][0]}:{branch_v:.2f})", count_u + count_v, height]
+
+        for k in set(active_clusters) - {u,v,new_id}:
+            distances[k,new_id] = distances[new_id,k] = (count_u * distances[u,k] + count_v * distances[v,k])/(count_u + count_v)
+
+        del active_clusters[u], active_clusters[v]
+    return list(active_clusters.values())[0][0] + ";"
+
+
+def create_labels(start: str='A', end: str='C'):
+    labels = [chr(i) for i in range(ord(start),ord(end)+1)]
+    return labels
+
+matrix = [
+    [0,2,5],
+    [2,0,6],
+    [5,6,0]
+]
+labels = create_labels()
+
+newick_string = upgma(matrix,labels)
+print(newick_string)`.split("\n");
+const N1="(A:1.00,B:1.00)",N2="((A:1.00,B:1.00):1.75,C:2.75)";
+const A0=[[0,"A",1,0],[1,"B",1,0],[2,"C",1,0]];
+const D0=[["0,1",2],["0,2",5],["1,2",6]];
+const S=[
+{t:"1. Start: every sequence is its own cluster",l:[5,7],a:A0,d:[],tr:0,
+ h:`<p><code>active_clusters</code> maps a cluster id to <code>[name, size, height]</code>. At the start each label (A, B, C) is a cluster of size 1 sitting at height 0.0, a leaf of the tree.</p>`},
+{t:"2. Store pairwise distances",l:[9,11],a:A0,d:D0,tr:0,
+ h:`<p>The dictionary comprehension copies the matrix into <code>distances[(i,j)]</code>, skipping the diagonal (<code>i!=j</code>). Both <code>(0,1)</code> and <code>(1,0)</code> are stored, so lookups work in either order.</p>`},
+{t:"3. Loop: find the closest pair",l:[13,15],a:A0,d:D0,pick:[0,1],pk:"0,1",tr:0,
+ h:`<p>The loop runs until one cluster is left. <code>min(...)</code> scans every pair with <code>i&lt;j</code> (so each pair is seen once) and picks the smallest distance via <code>key=lambda x: distances[x]</code>.</p><p>Closest pair: <b>A and B</b> at distance 2, so <code>u=0, v=1</code>.</p>`},
+{t:"4. Height and branch lengths",l:[17,20],a:A0,d:D0,pick:[0,1],pk:"0,1",tr:0,
+ h:`<p>UPGMA assumes a molecular clock, so the new node sits at half the distance: <code>height = 2 / 2 = 1.0</code>.</p><p>Branch length = new height minus the child's own height. Both children are leaves (height 0), so both branches are <b>1.0</b>. <code>count_u, count_v</code> are the cluster sizes (1 and 1), saved for weighting.</p>`},
+{t:"5. Create the merged cluster",l:[22,23],a:[...A0,[3,N1,2,1]],d:D0,newc:3,tr:1,
+ h:`<p><code>max(active_clusters)+1</code> gives a fresh id: <b>3</b>. The f-string builds a Newick fragment <code>(A:1.00,B:1.00)</code>, the size becomes 1+1 = 2 and the height is 1.0.</p>`},
+{t:"6. Update distances (the 'average' in UPGMA)",l:[25,26],a:[...A0,[3,N1,2,1]],d:[...D0,["2,3",5.5]],newd:"2,3",newc:3,tr:1,
+ h:`<p>For every remaining cluster <code>k</code> (only C here), the new distance is the size-weighted average:</p><p><code>(1&times;d(A,C) + 1&times;d(B,C)) / 2 = (5 + 6) / 2 = 5.5</code></p><p>Larger clusters count for more, which is why we track <code>count</code>.</p>`},
+{t:"7. Remove the merged clusters",l:[28],a:[[2,"C",1,0],[3,N1,2,1]],d:[...D0,["2,3",5.5]],tr:1,
+ h:`<p><code>del active_clusters[u], active_clusters[v]</code> retires A and B. Only C (id 2) and the new cluster (id 3) remain active. Old distance entries stay in the dict but are never read again.</p>`},
+{t:"8. Second round: merge (AB) with C",l:[13,23],a:[[2,"C",1,0],[3,N1,2,1],[4,N2,3,2.75]],d:[...D0,["2,3",5.5]],pick:[2,3],pk:"2,3",newc:4,tr:2,
+ h:`<p>The closest pair is now <code>(2,3)</code> at 5.5, so <code>height = 2.75</code>.</p><p>Branch to C: 2.75 &minus; 0 = <b>2.75</b>. Branch to (A,B): 2.75 &minus; 1.0 = <b>1.75</b>. Subtracting the child's height keeps every leaf at the same distance from the root (an ultrametric tree). The new cluster (id 4) has size 3. There are no other clusters to update, then both old clusters are deleted.</p>`},
+{t:"9. Return the Newick string",l:[29],a:[[4,N2,3,2.75]],d:[],tr:2,fin:1,
+ h:`<p>One cluster remains, so the loop ends. The function returns its name plus <code>;</code>, the Newick format that tree tools (and many plotting libraries) can read.</p><p>This is exactly what <code>print(newick_string)</code> shows.</p>`}
+];
+const codeEl=document.getElementById("code");
+CODE.forEach((s,i)=>{const d=document.createElement("div");d.className="ln";d.innerHTML=`<b>${i+1}</b>`;d.append(document.createTextNode(s||" "));codeEl.append(d)});
+const dots=document.getElementById("dots");
+S.forEach((_,i)=>{const e=document.createElement("i");e.onclick=()=>go(i);dots.append(e)});
+function tree(st){
+ const y=h=>200-h*55,L=(a,b,c,d)=>`<path class="l" d="M${a} ${b}L${c} ${d}"/>`;
+ let s="";
+ const leaf=(x,n)=>`<text x="${x}" y="218" text-anchor="middle">${n}</text>`;
+ s+=leaf(70,"A")+leaf(130,"B")+leaf(210,"C");
+ if(st==0)s+=`<circle cx="70" cy="200" r="4" fill="var(--ac)"/><circle cx="130" cy="200" r="4" fill="var(--ac)"/><circle cx="210" cy="200" r="4" fill="var(--ac)"/>`;
+ if(st>=1)s+=L(70,200,70,y(1))+L(130,200,130,y(1))+L(70,y(1),130,y(1))+`<text x="140" y="${y(1)-4}" font-size="11">h=1</text>`;
+ if(st>=2)s+=L(100,y(1),100,y(2.75))+L(210,200,210,y(2.75))+L(100,y(2.75),210,y(2.75))+`<text x="215" y="${y(2.75)+4}">h=2.75</text>`;
+ return s;}
+let cur=0;
+function go(i){cur=i;const s=S[i];
+ [...codeEl.children].forEach((e,j)=>e.classList.toggle("on",j+1>=s.l[0]&&j+1<=(s.l[1]||s.l[0])));
+ codeEl.children[s.l[0]-1].scrollIntoView({block:"nearest",behavior:"smooth"});
+ document.getElementById("step").innerHTML=`<h3>${s.t}</h3>${s.h}`;
+ [...dots.children].forEach((e,j)=>e.classList.toggle("on",j<=i));
+ document.getElementById("act").innerHTML=s.a.map(c=>`<div class="chip ${c[0]==s.newc?"new":""} ${s.pick&&s.pick.includes(c[0])&&c[0]!=s.newc?"pick":""}"><b>id ${c[0]}</b> ${c[1].length>22?c[1].slice(0,20)+"…":c[1]}<small>size ${c[2]} · height ${c[3]}</small></div>`).join("");
+ document.getElementById("dist").innerHTML=s.d.length?`<tr><th>pair</th><th>dist</th></tr>`+s.d.map(r=>`<tr class="${r[0]==s.pk?"pick":""} ${r[0]==s.newd?"new":""}"><td>(${r[0]})</td><td>${r[1]}</td></tr>`).join(""):`<tr><th>distances</th></tr><tr><td>(no pairs left)</td></tr>`;
+ document.getElementById("tree").innerHTML=tree(s.tr);
+ document.getElementById("out").textContent=s.fin?N2+";":"";
+ document.getElementById("out").style.display=s.fin?"block":"none";
+ prev.disabled=i==0;next.disabled=i==S.length-1;}
+const prev=document.getElementById("prev"),next=document.getElementById("next");
+prev.onclick=()=>go(cur-1);next.onclick=()=>go(cur+1);
+document.addEventListener("keydown",e=>{if(e.key=="ArrowRight"&&cur<S.length-1)go(cur+1);if(e.key=="ArrowLeft"&&cur>0)go(cur-1)});
+go(0);
+</script></body></html>
