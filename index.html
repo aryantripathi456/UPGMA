@@ -44,20 +44,31 @@ tr.new td{color:var(--ok);font-weight:600}
 svg{width:100%;height:auto;max-height:260px;display:block}
 svg text{fill:var(--tx);font:12px system-ui}
 svg .l{stroke:var(--ac);stroke-width:2.5;fill:none}
+.mx{width:auto;margin:14px auto 0;text-align:center}
+.mx th,.mx td{border:1px solid var(--bd);padding:8px 14px;text-align:center;min-width:64px}
+.mx th small{display:block;color:var(--mut);font-weight:400;font-size:.7rem}
+.mx td{font:600 1rem ui-monospace,Menlo,monospace;transition:background .3s}
+.mx .hl{background:var(--hl);outline:2px solid var(--hlb)}
+.mx .nw{color:var(--ok)}
+.mx .dead{opacity:.35;text-decoration:line-through}
+.mx .q{color:var(--mut);font-weight:400}
+.calc{margin-top:12px;padding:10px 12px;border-left:3px solid var(--ac);background:var(--code);border-radius:6px;font-size:.92rem}
+.calc div{margin:2px 0}
+.calc code{background:transparent;padding:0}
 .out{font:13px ui-monospace,Menlo,monospace;background:var(--code);padding:8px 10px;border-radius:8px;word-break:break-all;margin-top:8px}
 .right{display:flex;flex-direction:column;gap:16px}
 </style></head><body>
 <header><h1>UPGMA, line by line</h1>
-<p>Build a phylogenetic tree from a distance matrix. Click through the steps and watch the code, data and tree change together.</p></header>
+<p>Build a phylogenetic tree from a distance matrix. Click through the steps and watch the code and the distance matrix being solved by hand.</p></header>
 <main>
 <section class="card"><h2>Python code</h2><div class="code" id="code"></div></section>
 <div class="right">
 <section class="card">
 <div class="nav"><button class="g" id="prev">&larr; Back</button><button id="next">Next &rarr;</button><div class="dots" id="dots"></div></div>
 <div class="step" id="step"></div></section>
-<section class="card"><h2>Live state</h2>
+<section class="card"><h2>Live distance matrix (the "answer sheet")</h2>
 <div class="chips" id="act"></div>
-<div class="row2" style="margin-top:12px"><div><table id="dist"></table></div><div><svg id="tree" viewBox="0 0 280 230"></svg></div></div>
+<table class="mx" id="mx"></table><div class="calc" id="calc"></div>
 <div class="out" id="out"></div></section>
 </div></main>
 <script>
@@ -128,6 +139,30 @@ const S=[
 {t:"9. Return the Newick string",l:[29],a:[[4,N2,3,2.75]],d:[],tr:2,fin:1,
  h:`<p>One cluster remains, so the loop ends. The function returns its name plus <code>;</code>, the Newick format that tree tools (and many plotting libraries) can read.</p><p>This is exactly what <code>print(newick_string)</code> shows.</p>`}
 ];
+const L={0:"A",1:"B",2:"C",3:"(AB)",4:"(ABC)"},D={"0,1":2,"0,2":5,"1,2":6,"2,3":5.5};
+const M=[
+{ids:[0,1,2],c:["Input matrix: the distance between every pair of sequences.","Every cluster has size 1 and height 0 so far."]},
+{ids:[0,1,2],c:["<code>distances[(0,1)] = 2</code>, <code>(0,2) = 5</code>, <code>(1,2) = 6</code>","Only the upper triangle (i&lt;j) is searched; the matrix is symmetric."]},
+{ids:[0,1,2],hl:[0,1],c:["Candidates: d(A,B)=<b>2</b>, d(A,C)=5, d(B,C)=6","Smallest = <b>2</b> &rarr; <code>u=0 (A)</code>, <code>v=1 (B)</code>"]},
+{ids:[0,1,2],hl:[0,1],c:["height = 2 / 2 = <b>1.0</b>","branch_u = 1.0 &minus; 0 = <b>1.0</b>, branch_v = 1.0 &minus; 0 = <b>1.0</b>","count_u = 1, count_v = 1"]},
+{ids:[0,1,2,3],nw:3,hide:1,uv:[0,1],c:["A new row and column appears for cluster <b>(AB)</b> (id 3): size 2, height 1.0","Its distance to C is still unknown (?). A and B no longer need distances."]},
+{ids:[0,1,2,3],nw:3,uv:[0,1],hl:[2,3],c:["d((AB),C) = (1&times;d(A,C) + 1&times;d(B,C)) / (1+1)","= (1&times;5 + 1&times;6) / 2 = 11 / 2 = <b>5.5</b>","The code only updates k not in {u, v}, so only C gets a value."]},
+{ids:[0,1,2,3],nw:3,dead:[0,1],uv:[0,1],c:["A and B are deleted from <code>active_clusters</code> (faded rows and columns).","Remaining active clusters: C (id 2) and (AB) (id 3)."]},
+{ids:[2,3],hl:[2,3],c:["Matrix is now 2&times;2. Smallest pair: d(C,(AB)) = <b>5.5</b>","height = 5.5 / 2 = <b>2.75</b>","branch to C = 2.75 &minus; 0 = <b>2.75</b>; branch to (AB) = 2.75 &minus; 1.0 = <b>1.75</b>","new_id = 4, size = 1 + 2 = 3. No other clusters, so no distances to update."]},
+{ids:[4],c:["Everything is merged: a 1&times;1 matrix remains, cluster (ABC) at height 2.75.","The loop ends (<code>len(active_clusters) == 1</code>) and the name is returned."]}
+];
+function mx(m){const ids=m.ids,H=(m.hl||[]),dead=m.dead||[],uv=m.uv||[];
+ const dc=j=>dead.includes(j)?"dead":(j==m.nw?"nw":"");
+ let h="<tr><th></th>"+ids.map(j=>`<th class="${dc(j)}">${L[j]}<small>id ${j}</small></th>`).join("")+"</tr>";
+ ids.forEach(i=>{h+=`<tr><th class="${dc(i)}">${L[i]}<small>id ${i}</small></th>`+ids.map(j=>{
+  let v,cl="";
+  if(i==j)v=0;else{const k=Math.min(i,j)+","+Math.max(i,j);
+   if(i==m.nw||j==m.nw){const o=i==m.nw?j:i;v=uv.includes(o)?"&ndash;":(m.hide?"?":D[k]);if(m.hide||uv.includes(o))cl="q";}
+   else v=D[k];}
+  if(H.includes(i)&&H.includes(j)&&i!=j)cl+=" hl";
+  if(dead.includes(i)||dead.includes(j))cl+=" dead";
+  return `<td class="${cl}">${v}</td>`}).join("")+"</tr>"});
+ return h;}
 const codeEl=document.getElementById("code");
 CODE.forEach((s,i)=>{const d=document.createElement("div");d.className="ln";d.innerHTML=`<b>${i+1}</b>`;d.append(document.createTextNode(s||" "));codeEl.append(d)});
 const dots=document.getElementById("dots");
@@ -148,8 +183,8 @@ function go(i){cur=i;const s=S[i];
  document.getElementById("step").innerHTML=`<h3>${s.t}</h3>${s.h}`;
  [...dots.children].forEach((e,j)=>e.classList.toggle("on",j<=i));
  document.getElementById("act").innerHTML=s.a.map(c=>`<div class="chip ${c[0]==s.newc?"new":""} ${s.pick&&s.pick.includes(c[0])&&c[0]!=s.newc?"pick":""}"><b>id ${c[0]}</b> ${c[1].length>22?c[1].slice(0,20)+"…":c[1]}<small>size ${c[2]} · height ${c[3]}</small></div>`).join("");
- document.getElementById("dist").innerHTML=s.d.length?`<tr><th>pair</th><th>dist</th></tr>`+s.d.map(r=>`<tr class="${r[0]==s.pk?"pick":""} ${r[0]==s.newd?"new":""}"><td>(${r[0]})</td><td>${r[1]}</td></tr>`).join(""):`<tr><th>distances</th></tr><tr><td>(no pairs left)</td></tr>`;
- document.getElementById("tree").innerHTML=tree(s.tr);
+ document.getElementById("mx").innerHTML=mx(M[i]);
+ document.getElementById("calc").innerHTML=M[i].c.map(x=>`<div>${x}</div>`).join("");
  document.getElementById("out").textContent=s.fin?N2+";":"";
  document.getElementById("out").style.display=s.fin?"block":"none";
  prev.disabled=i==0;next.disabled=i==S.length-1;}
