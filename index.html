@@ -16,9 +16,12 @@ main{max-width:1200px;margin:auto;padding:16px 20px 40px;display:grid;grid-templ
 @media(max-width:860px){main{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;min-width:0}
 .card h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0 0 10px}
-.code{background:var(--code);border-radius:10px;padding:8px 0;overflow-x:auto;font:13px/1.6 ui-monospace,Menlo,Consolas,monospace}
-.ln{display:flex;white-space:pre;padding:0 10px;border-left:3px solid transparent;min-height:1.6em}
-.ln b{color:var(--mut);font-weight:400;width:2.4em;flex:none;user-select:none}
+.code{background:var(--code);border-radius:10px;padding:8px 0;font:12.5px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.ln{display:flex;padding:0 10px 0 6px;border-left:3px solid transparent;min-height:1.55em;border-radius:0 6px 6px 0}
+.ln span{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0;flex:1}
+.k{color:#a855f7;font-weight:600}.s{color:#1a9e5c}.n{color:#e07a10}.f{color:#2f7fe8;font-weight:600}.b{color:#0ea5b7}
+@media(min-width:861px){main>section.card:first-child{position:sticky;top:12px;align-self:start;max-height:calc(100vh - 24px);overflow:auto}}
+.ln b{color:var(--mut);font-weight:400;width:2.2em;flex:none;user-select:none;text-align:right;padding-right:.8em;opacity:.7}
 .ln.on{background:var(--hl);border-left-color:var(--hlb)}
 .nav{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
 button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer}
@@ -163,8 +166,9 @@ function mx(m){const ids=m.ids,H=(m.hl||[]),dead=m.dead||[],uv=m.uv||[];
   if(dead.includes(i)||dead.includes(j))cl+=" dead";
   return `<td class="${cl}">${v}</td>`}).join("")+"</tr>"});
  return h;}
+const hl=t=>t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/(f?"[^"]*"|f?'[^']*')|\b(import|as|def|while|for|in|if|del|return|lambda)\b|(?<=def )(\w+)|\b(min|max|len|range|set|list|chr|ord|print|str)\b|\b(\d+(?:\.\d+)?)\b/g,(m,a,k,f,b,n)=>a?`<i class="s" style="font-style:normal">${m}</i>`:k?`<i class="k" style="font-style:normal">${m}</i>`:f?`<i class="f" style="font-style:normal">${m}</i>`:b?`<i class="b" style="font-style:normal">${m}</i>`:`<i class="n" style="font-style:normal">${m}</i>`);
 const codeEl=document.getElementById("code");
-CODE.forEach((s,i)=>{const d=document.createElement("div");d.className="ln";d.innerHTML=`<b>${i+1}</b>`;d.append(document.createTextNode(s||" "));codeEl.append(d)});
+CODE.forEach((s,i)=>{const d=document.createElement("div");d.className="ln";const ind=s.length-s.trimStart().length;d.innerHTML=`<b>${i+1}</b><span style="padding-left:${ind}ch">${hl(s.trimStart())||" "}</span>`;codeEl.append(d)});
 const dots=document.getElementById("dots");
 S.forEach((_,i)=>{const e=document.createElement("i");e.onclick=()=>go(i);dots.append(e)});
 function tree(st){
